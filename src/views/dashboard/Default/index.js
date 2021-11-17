@@ -8,14 +8,14 @@ import axios from 'axios';
 
 // project imports
 import CatCard from './CatCard';
-import TotalGrowthBarChart from './TotalGrowthBarChart';
+import TotalVisitsChart from './TotalVisitsChart';
 import { gridSpacing } from 'store/constant';
 
 // ==============================|| DEFAULT DASHBOARD ||============================== //
 
 const Dashboard = () => {
     const [isLoadingCats, setLoadingCats] = useState(true);
-    const [cats, setCats] = useState([{}]);
+    const [cats, setCats] = useState([{}, {}]);
 
     useEffect(() => {
         // load cat data for display in cat cards
@@ -44,7 +44,7 @@ const Dashboard = () => {
             <Grid item xs={12}>
                 <Grid container spacing={gridSpacing}>
                     <Grid item xs={12} md={12}>
-                        <TotalGrowthBarChart isLoading={false} />
+                        <TotalVisitsChart isLoading={isLoadingCats} cats={cats} />
                     </Grid>
                 </Grid>
             </Grid>
