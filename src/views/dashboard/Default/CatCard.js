@@ -118,7 +118,7 @@ const CardWrapper = styled(MainCard)(({ theme, palettecolor }) => ({
 
 // ==============================|| DASHBOARD - CAT CARD ||============================== //
 
-const AVAILABLE_COLORS = ['primary', 'secondary', 'warning', 'success', 'orange'];
+const AVAILABLE_COLORS = ['primary', 'secondary', 'cat3', 'cat4', 'cat5'];
 
 const CatCard = ({ catIndex, cat, isLoading }) => {
     const theme = useTheme();

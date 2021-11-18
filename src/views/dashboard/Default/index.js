@@ -10,6 +10,7 @@ import axios from 'axios';
 import CatCard from './CatCard';
 import TotalVisitsChart from './TotalVisitsChart';
 import { gridSpacing } from 'store/constant';
+import config from 'config';
 
 // ==============================|| DEFAULT DASHBOARD ||============================== //
 
@@ -20,7 +21,7 @@ const Dashboard = () => {
     useEffect(() => {
         // load cat data for display in cat cards
         axios
-            .get('https://eyp1q43kk8.execute-api.us-east-1.amazonaws.com/Prod/cats')
+            .get(`${config.apiBaseUrl}/cats`)
             .then((response) => {
                 setCats(response.data.cats);
                 setLoadingCats(false);

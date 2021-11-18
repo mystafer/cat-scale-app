@@ -1,32 +1,43 @@
 import PropTypes from 'prop-types';
-import { useState, useEffect, useMemo } from 'react';
-import { useSelector } from 'react-redux';
+import { useState, useMemo } from 'react';
 
 // material-ui
 import { useTheme } from '@mui/material/styles';
 import { Grid, MenuItem, TextField, Typography } from '@mui/material';
 
 // third-party
-import ApexCharts from 'apexcharts';
 import Chart from 'react-apexcharts';
+import axios from 'axios';
 
 // project imports
 import SkeletonTotalGrowthBarChart from 'ui-component/cards/Skeleton/TotalGrowthBarChart';
 import MainCard from 'ui-component/cards/MainCard';
 import { gridSpacing } from 'store/constant';
+import config from 'config';
 
 function generateCatChartData(cat, visits) {
     const seriesData = {
         name: cat.name,
         data: visits.map((v) => ({
-            x: v.start_timestamp,
-            y: v.elapsed_sec
+            x: v.tick,
+            y: v.total_collapsed
         }))
     };
     return seriesData;
 }
 
 function wrapCatVisitsForChartData(cats, visits) {
+    // get series data for cats
+    const series = cats.filter((cat) => visits[cat.name].length > 0).map((cat) => generateCatChartData(cat, visits[cat.name]));
+
+    // determine the maxium Y value
+    let maxY = 0;
+    series.forEach((s) => {
+        maxY += s.data.map((d) => d.y).reduce((prev, next) => Math.max(prev, next), 0);
+    });
+    const yTickAmount = maxY > 0 ? Math.min(6, maxY) : 5;
+
+    // build chart data object
     const chartData = {
         height: 480,
         type: 'line',
@@ -90,10 +101,7 @@ function wrapCatVisitsForChartData(cats, visits) {
             },
             markers: {
                 size: 6,
-                formatter: (val, opts) => {
-                    console.log({ val, opts });
-                    return val;
-                }
+                formatter: (val) => val
             },
             xaxis: {
                 type: 'datetime',
@@ -103,8 +111,17 @@ function wrapCatVisitsForChartData(cats, visits) {
             },
             yaxis: {
                 labels: {
-                    formatter: (value) => `${value} sec`
-                }
+                    formatter: (value) => {
+                        if (value.toFixed(4) % 1 === 0) {
+                            const num = value.toFixed(0);
+                            if (num > 0 && num < 2) return '1 visit';
+                            return `${num} visits`;
+                        }
+                        return '';
+                    }
+                },
+                min: 0,
+                tickAmount: yTickAmount
             },
             tooltip: {
                 x: {
@@ -112,7 +129,7 @@ function wrapCatVisitsForChartData(cats, visits) {
                 }
             }
         },
-        series: cats.filter((cat) => cat.today_visits.length > 0).map((cat) => generateCatChartData(cat, visits[cat.name]))
+        series
     };
 
     return chartData;
@@ -126,11 +143,11 @@ const status = [
     {
         value: 'yesterday',
         label: 'Yesterday'
+    },
+    {
+        value: 'week',
+        label: 'This Week'
     }
-    // {
-    //     value: 'week',
-    //     label: 'This Week'
-    // },
     // {
     //     value: 'month',
     //     label: 'This Month'
@@ -142,74 +159,105 @@ const status = [
 const TotalVisitsChart = ({ isLoading, cats }) => {
     const [value, setValue] = useState('today');
     const theme = useTheme();
-    const customization = useSelector((state) => state.customization);
     const [chartData, setChartData] = useState(null);
     const [fetchingChartData, setFetchingChartData] = useState(true);
     const [totalVisitCount, setTotalVisitCount] = useState(0);
+    const [otherIntervalData, setOtherIntervalData] = useState({});
 
-    const { navType } = customization;
-    const { primary } = theme.palette.text;
-    const darkLight = theme.palette.dark.light;
     const grey200 = theme.palette.grey[200];
     const grey500 = theme.palette.grey[500];
 
-    const primary200 = theme.palette.primary[200];
-    const primaryDark = theme.palette.primary.dark;
-    const secondaryMain = theme.palette.secondary.main;
-    const secondaryLight = theme.palette.secondary.light;
+    const color1 = theme.palette.primary.dark;
+    const color2 = theme.palette.secondary.dark;
+    const color3 = theme.palette.cat3.dark;
+    const color4 = theme.palette.cat4.dark;
+    const color5 = theme.palette.cat5.dark;
 
     // calculate chart data based on cats
     useMemo(() => {
         if (!isLoading) {
-            let visitCount = 0;
-            const visits = {};
-            cats.forEach((cat) => {
-                if (value === 'today') {
-                    visits[cat.name] = cat.today_visits;
-                } else if (value === 'yesterday') {
-                    visits[cat.name] = cat.yesterday_visits;
-                } else {
-                    visits[cat.name] = [];
-                }
-
-                visitCount += visits[cat.name].length;
-            });
-
-            setTotalVisitCount(visitCount);
-            setChartData(wrapCatVisitsForChartData(cats, visits));
-            setFetchingChartData(false);
-        }
-    }, [isLoading, cats, value]);
-
-    // update the chart look and feel
-    useEffect(() => {
-        if (chartData) {
-            const newChartData = {
-                ...chartData.options,
-                colors: [primary200, primaryDark, secondaryMain, secondaryLight],
-                grid: {
-                    borderColor: grey200
-                },
-                tooltip: {
-                    theme: 'light'
-                },
-                legend: {
-                    labels: {
-                        colors: grey500
+            // update the chart look and feel
+            const updateChartColors = (chartData) => ({
+                ...chartData,
+                options: {
+                    ...chartData.options,
+                    colors: [color1, color2, color3, color4, color5],
+                    grid: {
+                        borderColor: grey200
+                    },
+                    tooltip: {
+                        theme: 'light'
+                    },
+                    legend: {
+                        labels: {
+                            colors: grey500
+                        }
                     }
                 }
-            };
+            });
 
-            // do not load chart when loading
-            if (!isLoading) {
-                ApexCharts.exec(`bar-chart`, 'updateOptions', newChartData);
+            if (['today', 'yesterday'].includes(value)) {
+                let visitCount = 0;
+                const visits = {};
+
+                cats.forEach((cat) => {
+                    if (value === 'today') {
+                        visits[cat.name] = cat.today_visits;
+                    } else if (value === 'yesterday') {
+                        visits[cat.name] = cat.yesterday_visits;
+                    } else {
+                        visits[cat.name] = [];
+                    }
+
+                    visitCount += visits[cat.name].map((v) => v.total_collapsed).reduce((prev, next) => prev + next, 0);
+                });
+
+                setTotalVisitCount(visitCount);
+                setChartData(updateChartColors(wrapCatVisitsForChartData(cats, visits)));
+                setFetchingChartData(false);
+            } else if (value === 'week') {
+                setFetchingChartData(true);
+
+                if (otherIntervalData.week) {
+                    setTotalVisitCount(otherIntervalData.week.visitCount);
+                    setChartData(updateChartColors(wrapCatVisitsForChartData(otherIntervalData.week.cats, otherIntervalData.week.visits)));
+                    setFetchingChartData(false);
+                } else {
+                    const fourHours = 4 * 60 * 60 * 1000;
+
+                    // load cat data for display in cat cards
+                    axios
+                        .get(`${config.apiBaseUrl}/cats/visits?start_date=2021.11.14&end_date=2021.11.20&collapse_ms=${fourHours}`)
+                        .then((response) => {
+                            const cats = response.data.cats;
+
+                            let visitCount = 0;
+                            const visits = {};
+                            cats.forEach((cat) => {
+                                visits[cat.name] = cat.visits;
+                                visitCount += cat.visits.map((v) => v.total_collapsed).reduce((prev, next) => prev + next, 0);
+                            });
+
+                            setTotalVisitCount(visitCount);
+                            setChartData(updateChartColors(wrapCatVisitsForChartData(cats, visits)));
+                            setFetchingChartData(false);
+
+                            setOtherIntervalData({
+                                ...otherIntervalData,
+                                week: { visitCount, cats, visits }
+                            });
+                        })
+                        .catch((error) => {
+                            console.log(error);
+                        });
+                }
             }
         }
-    }, [chartData, navType, primary200, primaryDark, secondaryMain, secondaryLight, primary, darkLight, grey200, isLoading, grey500]);
+    }, [cats, value, otherIntervalData, color1, color2, color3, color4, color5, grey200, isLoading, grey500]);
 
     return (
         <>
-            {isLoading || fetchingChartData ? (
+            {isLoading ? (
                 <SkeletonTotalGrowthBarChart />
             ) : (
                 <MainCard>
@@ -243,7 +291,7 @@ const TotalVisitsChart = ({ isLoading, cats }) => {
                             </Grid>
                         </Grid>
                         <Grid item xs={12}>
-                            <Chart {...chartData} />
+                            {fetchingChartData ? <Chart {...wrapCatVisitsForChartData([])} /> : <Chart {...chartData} />}
                         </Grid>
                     </Grid>
                 </MainCard>

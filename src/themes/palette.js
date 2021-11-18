@@ -23,6 +23,27 @@ export default function themePalette(theme) {
             200: theme.colors?.secondary200,
             800: theme.colors?.secondary800
         },
+        cat3: {
+            light: theme.colors?.warningLight,
+            main: theme.colors?.warningMain,
+            dark: theme.colors?.warningDark,
+            200: theme.colors?.warning200,
+            800: theme.colors?.warning800
+        },
+        cat4: {
+            light: theme.colors?.successLight,
+            main: theme.colors?.successMain,
+            dark: theme.colors?.successDark,
+            200: theme.colors?.success200,
+            800: theme.colors?.success800
+        },
+        cat5: {
+            light: theme.colors?.orangeLight,
+            main: theme.colors?.orangeMain,
+            dark: theme.colors?.orangeDark,
+            200: theme.colors?.orange200,
+            800: theme.colors?.orange800
+        },
         error: {
             light: theme.colors?.errorLight,
             main: theme.colors?.errorMain,
