@@ -8,6 +8,7 @@ import { Grid, MenuItem, TextField, Typography } from '@mui/material';
 // third-party
 import Chart from 'react-apexcharts';
 import axios from 'axios';
+import { DateTime } from 'luxon';
 
 // project imports
 import SkeletonTotalGrowthBarChart from 'ui-component/cards/Skeleton/TotalGrowthBarChart';
@@ -225,9 +226,14 @@ const TotalVisitsChart = ({ isLoading, cats }) => {
                 } else {
                     const fourHours = 4 * 60 * 60 * 1000;
 
+                    const now = DateTime.now();
+                    const firstDay = now.minus({ day: now.weekday });
+                    const sunday = firstDay.toFormat('yyyy.MM.dd');
+                    const saturday = firstDay.plus({ day: 6 }).toFormat('yyyy.MM.dd');
+
                     // load cat data for display in cat cards
                     axios
-                        .get(`${config.apiBaseUrl}/cats/visits?start_date=2021.11.14&end_date=2021.11.20&collapse_ms=${fourHours}`)
+                        .get(`${config.apiBaseUrl}/cats/visits?start_date=${sunday}&end_date=${saturday}&collapse_ms=${fourHours}`)
                         .then((response) => {
                             const cats = response.data.cats;
 
