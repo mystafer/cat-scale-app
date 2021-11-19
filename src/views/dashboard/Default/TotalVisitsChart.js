@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react';
 
 // material-ui
 import { useTheme } from '@mui/material/styles';
-import { Grid, MenuItem, TextField, Typography } from '@mui/material';
+import { Box, Grid, LinearProgress, MenuItem, TextField, Typography } from '@mui/material';
 
 // third-party
 import Chart from 'react-apexcharts';
@@ -16,20 +16,20 @@ import MainCard from 'ui-component/cards/MainCard';
 import { gridSpacing } from 'store/constant';
 import config from 'config';
 
-function generateCatChartData(cat, visits) {
+function generateCatChartData(cat, intervals) {
     const seriesData = {
         name: cat.name,
-        data: visits.map((v) => ({
-            x: v.tick,
-            y: v.total_collapsed
+        data: intervals.map((interval) => ({
+            x: interval.tick,
+            y: interval.total_collapsed
         }))
     };
     return seriesData;
 }
 
-function wrapCatVisitsForChartData(cats, visits) {
+function wrapCatVisitsForChartData(cats, intervals, suppressTime) {
     // get series data for cats
-    const series = cats.filter((cat) => visits[cat.name].length > 0).map((cat) => generateCatChartData(cat, visits[cat.name]));
+    const series = cats.filter((cat) => intervals[cat.name].length > 0).map((cat) => generateCatChartData(cat, intervals[cat.name]));
 
     // determine the maxium Y value
     let maxY = 0;
@@ -49,7 +49,10 @@ function wrapCatVisitsForChartData(cats, visits) {
                     show: true,
                     export: {
                         csv: {
-                            dateFormatter: (timestamp) => new Date(timestamp).toLocaleString().replaceAll(',', ' ')
+                            dateFormatter: (timestamp) =>
+                                suppressTime
+                                    ? new Date(timestamp).toDateString()
+                                    : new Date(timestamp).toLocaleString().replaceAll(',', ' ')
                         }
                     }
                 },
@@ -121,12 +124,13 @@ function wrapCatVisitsForChartData(cats, visits) {
                         return '';
                     }
                 },
-                min: 0,
+                min: maxY === 1 ? 0 : 1,
                 tickAmount: yTickAmount
             },
             tooltip: {
+                theme: 'light',
                 x: {
-                    format: 'dd MMM HH:mm'
+                    format: 'dd MMM HH:mm' // suppressTime ? 'dd MMM' : 'dd MMM HH:mm'
                 }
             }
         },
@@ -148,11 +152,11 @@ const status = [
     {
         value: 'week',
         label: 'This Week'
+    },
+    {
+        value: 'month',
+        label: 'This Month'
     }
-    // {
-    //     value: 'month',
-    //     label: 'This Month'
-    // }
 ];
 
 // ==============================|| DASHBOARD DEFAULT - TOTAL VISITS CHART ||============================== //
@@ -184,13 +188,13 @@ const TotalVisitsChart = ({ isLoading, cats }) => {
                     ...chartData.options,
                     colors: [color1, color2, color3, color4, color5],
                     grid: {
+                        ...chartData.options.grid,
                         borderColor: grey200
                     },
-                    tooltip: {
-                        theme: 'light'
-                    },
                     legend: {
+                        ...chartData.options.legend,
                         labels: {
+                            ...chartData.options.legend.labels,
                             colors: grey500
                         }
                     }
@@ -210,7 +214,11 @@ const TotalVisitsChart = ({ isLoading, cats }) => {
                         visits[cat.name] = [];
                     }
 
-                    visitCount += visits[cat.name].map((v) => v.total_collapsed).reduce((prev, next) => prev + next, 0);
+                    visits[cat.name].forEach((v) => {
+                        v.tick = v.start_timestamp;
+                    });
+
+                    visitCount += visits[cat.name].length;
                 });
 
                 setTotalVisitCount(visitCount);
@@ -221,10 +229,12 @@ const TotalVisitsChart = ({ isLoading, cats }) => {
 
                 if (otherIntervalData.week) {
                     setTotalVisitCount(otherIntervalData.week.visitCount);
-                    setChartData(updateChartColors(wrapCatVisitsForChartData(otherIntervalData.week.cats, otherIntervalData.week.visits)));
+                    setChartData(
+                        updateChartColors(wrapCatVisitsForChartData(otherIntervalData.week.cats, otherIntervalData.week.intervals))
+                    );
                     setFetchingChartData(false);
                 } else {
-                    const fourHours = 4 * 60 * 60 * 1000;
+                    const sixHours = 6 * 60 * 60 * 1000;
 
                     const now = DateTime.now();
                     const firstDay = now.minus({ day: now.weekday });
@@ -233,24 +243,70 @@ const TotalVisitsChart = ({ isLoading, cats }) => {
 
                     // load cat data for display in cat cards
                     axios
-                        .get(`${config.apiBaseUrl}/cats/visits?start_date=${sunday}&end_date=${saturday}&collapse_ms=${fourHours}`)
+                        .get(`${config.apiBaseUrl}/cats/intervals?start_date=${sunday}&end_date=${saturday}&collapse_ms=${sixHours}`)
                         .then((response) => {
                             const cats = response.data.cats;
 
                             let visitCount = 0;
-                            const visits = {};
+                            const intervals = {};
                             cats.forEach((cat) => {
-                                visits[cat.name] = cat.visits;
-                                visitCount += cat.visits.map((v) => v.total_collapsed).reduce((prev, next) => prev + next, 0);
+                                intervals[cat.name] = cat.intervals;
+                                visitCount += cat.intervals.map((v) => v.total_collapsed).reduce((prev, next) => prev + next, 0);
                             });
 
                             setTotalVisitCount(visitCount);
-                            setChartData(updateChartColors(wrapCatVisitsForChartData(cats, visits)));
+                            setChartData(updateChartColors(wrapCatVisitsForChartData(cats, intervals)));
                             setFetchingChartData(false);
 
                             setOtherIntervalData({
                                 ...otherIntervalData,
-                                week: { visitCount, cats, visits }
+                                week: { visitCount, cats, intervals }
+                            });
+                        })
+                        .catch((error) => {
+                            console.log(error);
+                        });
+                }
+            } else if (value === 'month') {
+                setFetchingChartData(true);
+
+                if (otherIntervalData.month) {
+                    setTotalVisitCount(otherIntervalData.month.visitCount);
+                    setChartData(
+                        updateChartColors(wrapCatVisitsForChartData(otherIntervalData.month.cats, otherIntervalData.month.intervals, true))
+                    );
+                    setFetchingChartData(false);
+                } else {
+                    const twentyFourHours = 24 * 60 * 60 * 1000;
+
+                    const now = DateTime.now();
+                    const firstDay = now.set({ day: 1 });
+                    const firstDayStr = firstDay.toFormat('yyyy.MM.dd');
+                    const lastDay = firstDay.plus({ month: 1 }).minus({ day: 1 });
+                    const lastDayStr = lastDay.toFormat('yyyy.MM.dd');
+
+                    // load cat data for display in cat cards
+                    axios
+                        .get(
+                            `${config.apiBaseUrl}/cats/intervals?start_date=${firstDayStr}&end_date=${lastDayStr}&collapse_ms=${twentyFourHours}`
+                        )
+                        .then((response) => {
+                            const cats = response.data.cats;
+
+                            let visitCount = 0;
+                            const intervals = {};
+                            cats.forEach((cat) => {
+                                intervals[cat.name] = cat.intervals;
+                                visitCount += cat.intervals.map((v) => v.total_collapsed).reduce((prev, next) => prev + next, 0);
+                            });
+
+                            setTotalVisitCount(visitCount);
+                            setChartData(updateChartColors(wrapCatVisitsForChartData(cats, intervals, true)));
+                            setFetchingChartData(false);
+
+                            setOtherIntervalData({
+                                ...otherIntervalData,
+                                month: { visitCount, cats, intervals }
                             });
                         })
                         .catch((error) => {
@@ -297,7 +353,13 @@ const TotalVisitsChart = ({ isLoading, cats }) => {
                             </Grid>
                         </Grid>
                         <Grid item xs={12}>
-                            {fetchingChartData ? <Chart {...wrapCatVisitsForChartData([])} /> : <Chart {...chartData} />}
+                            {fetchingChartData ? (
+                                <Box height={400}>
+                                    <LinearProgress variant="indeterminate" />
+                                </Box>
+                            ) : (
+                                <Chart {...chartData} />
+                            )}
                         </Grid>
                     </Grid>
                 </MainCard>

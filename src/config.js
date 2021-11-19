@@ -7,7 +7,7 @@ const config = {
     defaultPath: '/dashboard/default',
     fontFamily: `'Roboto', sans-serif`,
     borderRadius: 12,
-    apiBaseUrl: `${secrets.apiGatewayUrl}/Prod`
+    apiBaseUrl: secrets.apiGatewayUrl
 };
 
 export default config;

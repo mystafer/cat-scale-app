@@ -23,7 +23,8 @@ const Dashboard = () => {
         axios
             .get(`${config.apiBaseUrl}/cats`)
             .then((response) => {
-                setCats(response.data.cats);
+                const cats = response.data.cats;
+                setCats(cats);
                 setLoadingCats(false);
             })
             .catch((error) => {
