@@ -31,11 +31,13 @@ function wrapCatVisitsForChartData(cats, intervals, suppressTime) {
     // get series data for cats
     const series = cats.filter((cat) => intervals[cat.name].length > 0).map((cat) => generateCatChartData(cat, intervals[cat.name]));
 
-    // determine the maxium Y value
+    // determine the minimumm and maxium Y value
     let maxY = 0;
     series.forEach((s) => {
         maxY += s.data.map((d) => d.y).reduce((prev, next) => Math.max(prev, next), 0);
     });
+    const minY = maxY === 1 ? 0 : 1;
+    maxY = Math.max(maxY, 2);
     const yTickAmount = maxY > 0 ? Math.min(6, maxY) : 5;
 
     // build chart data object
@@ -104,8 +106,7 @@ function wrapCatVisitsForChartData(cats, intervals, suppressTime) {
                 curve: 'smooth'
             },
             markers: {
-                size: 6,
-                formatter: (val) => val
+                size: 6
             },
             xaxis: {
                 type: 'datetime',
@@ -124,13 +125,14 @@ function wrapCatVisitsForChartData(cats, intervals, suppressTime) {
                         return '';
                     }
                 },
-                min: maxY === 1 ? 0 : 1,
+                min: minY,
+                max: maxY,
                 tickAmount: yTickAmount
             },
             tooltip: {
                 theme: 'light',
                 x: {
-                    format: 'dd MMM HH:mm' // suppressTime ? 'dd MMM' : 'dd MMM HH:mm'
+                    format: suppressTime ? 'dd MMM' : 'dd MMM HH:mm'
                 }
             }
         },
@@ -203,26 +205,22 @@ const TotalVisitsChart = ({ isLoading, cats }) => {
 
             if (['today', 'yesterday'].includes(value)) {
                 let visitCount = 0;
-                const visits = {};
+                const intervals = {};
 
                 cats.forEach((cat) => {
                     if (value === 'today') {
-                        visits[cat.name] = cat.today_visits;
+                        intervals[cat.name] = cat.today_intervals;
                     } else if (value === 'yesterday') {
-                        visits[cat.name] = cat.yesterday_visits;
+                        intervals[cat.name] = cat.yesterday_intervals;
                     } else {
-                        visits[cat.name] = [];
+                        intervals[cat.name] = [];
                     }
 
-                    visits[cat.name].forEach((v) => {
-                        v.tick = v.start_timestamp;
-                    });
-
-                    visitCount += visits[cat.name].length;
+                    visitCount += intervals[cat.name].map((v) => v.total_collapsed).reduce((prev, next) => prev + next, 0);
                 });
 
                 setTotalVisitCount(visitCount);
-                setChartData(updateChartColors(wrapCatVisitsForChartData(cats, visits)));
+                setChartData(updateChartColors(wrapCatVisitsForChartData(cats, intervals)));
                 setFetchingChartData(false);
             } else if (value === 'week') {
                 setFetchingChartData(true);
@@ -332,7 +330,7 @@ const TotalVisitsChart = ({ isLoading, cats }) => {
                                             <Typography variant="subtitle2">Total Visits</Typography>
                                         </Grid>
                                         <Grid item>
-                                            <Typography variant="h3">{totalVisitCount}</Typography>
+                                            <Typography variant="h3">{fetchingChartData ? 0 : totalVisitCount}</Typography>
                                         </Grid>
                                     </Grid>
                                 </Grid>
