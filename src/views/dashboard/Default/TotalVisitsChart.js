@@ -34,16 +34,19 @@ function wrapCatVisitsForChartData(cats, intervals, suppressTime) {
     // determine the minimumm and maxium Y value
     let maxY = 0;
     series.forEach((s) => {
-        maxY += s.data.map((d) => d.y).reduce((prev, next) => Math.max(prev, next), 0);
+        maxY = Math.max(
+            maxY,
+            s.data.map((d) => d.y).reduce((prev, next) => Math.max(prev, next), 0)
+        );
     });
-    const minY = maxY === 1 ? 0 : 1;
+    const minY = 0; // maxY === 1 ? 0 : 1;
     maxY = Math.max(maxY, 2);
     const yTickAmount = maxY > 0 ? Math.min(6, maxY) : 5;
 
     // build chart data object
     const chartData = {
         height: 480,
-        type: 'line',
+        type: 'bar',
         options: {
             chart: {
                 id: 'visits-chart',
@@ -58,6 +61,7 @@ function wrapCatVisitsForChartData(cats, intervals, suppressTime) {
                         }
                     }
                 },
+                stacked: false,
                 zoom: {
                     enabled: true
                 }
@@ -152,13 +156,21 @@ const status = [
         label: 'Yesterday'
     },
     {
-        value: 'week',
-        label: 'This Week'
+        value: 'last7',
+        label: 'Last 7 Days'
     },
     {
-        value: 'month',
-        label: 'This Month'
+        value: 'last30',
+        label: 'Last 30 Days'
     }
+    // {
+    //     value: 'week',
+    //     label: 'This Week'
+    // },
+    // {
+    //     value: 'month',
+    //     label: 'This Month'
+    // }
 ];
 
 // ==============================|| DASHBOARD DEFAULT - TOTAL VISITS CHART ||============================== //
@@ -222,66 +234,46 @@ const TotalVisitsChart = ({ isLoading, cats }) => {
                 setTotalVisitCount(visitCount);
                 setChartData(updateChartColors(wrapCatVisitsForChartData(cats, intervals)));
                 setFetchingChartData(false);
-            } else if (value === 'week') {
+            } else {
                 setFetchingChartData(true);
 
-                if (otherIntervalData.week) {
-                    setTotalVisitCount(otherIntervalData.week.visitCount);
+                if (otherIntervalData[value]) {
+                    setTotalVisitCount(otherIntervalData[value].visitCount);
                     setChartData(
-                        updateChartColors(wrapCatVisitsForChartData(otherIntervalData.week.cats, otherIntervalData.week.intervals))
-                    );
-                    setFetchingChartData(false);
-                } else {
-                    const sixHours = 6 * 60 * 60 * 1000;
-
-                    const now = DateTime.now();
-                    const firstDay = now.minus({ day: now.weekday });
-                    const sunday = firstDay.toFormat('yyyy.MM.dd');
-                    const saturday = firstDay.plus({ day: 6 }).toFormat('yyyy.MM.dd');
-
-                    // load cat data for display in cat cards
-                    axios
-                        .get(`${config.apiBaseUrl}/cats/intervals?start_date=${sunday}&end_date=${saturday}&collapse_ms=${sixHours}`)
-                        .then((response) => {
-                            const cats = response.data.cats;
-
-                            let visitCount = 0;
-                            const intervals = {};
-                            cats.forEach((cat) => {
-                                intervals[cat.name] = cat.intervals;
-                                visitCount += cat.intervals.map((v) => v.total_collapsed).reduce((prev, next) => prev + next, 0);
-                            });
-
-                            setTotalVisitCount(visitCount);
-                            setChartData(updateChartColors(wrapCatVisitsForChartData(cats, intervals)));
-                            setFetchingChartData(false);
-
-                            setOtherIntervalData({
-                                ...otherIntervalData,
-                                week: { visitCount, cats, intervals }
-                            });
-                        })
-                        .catch((error) => {
-                            console.log(error);
-                        });
-                }
-            } else if (value === 'month') {
-                setFetchingChartData(true);
-
-                if (otherIntervalData.month) {
-                    setTotalVisitCount(otherIntervalData.month.visitCount);
-                    setChartData(
-                        updateChartColors(wrapCatVisitsForChartData(otherIntervalData.month.cats, otherIntervalData.month.intervals, true))
+                        updateChartColors(
+                            wrapCatVisitsForChartData(otherIntervalData[value].cats, otherIntervalData[value].intervals, true)
+                        )
                     );
                     setFetchingChartData(false);
                 } else {
                     const twentyFourHours = 24 * 60 * 60 * 1000;
 
-                    const now = DateTime.now();
-                    const firstDay = now.set({ day: 1 });
-                    const firstDayStr = firstDay.toFormat('yyyy.MM.dd');
-                    const lastDay = firstDay.plus({ month: 1 }).minus({ day: 1 });
-                    const lastDayStr = lastDay.toFormat('yyyy.MM.dd');
+                    let firstDayStr = null;
+                    let lastDayStr = null;
+                    if (value === 'week') {
+                        const now = DateTime.now();
+                        const firstDay = now.minus({ day: now.weekday });
+                        firstDayStr = firstDay.toFormat('yyyy.MM.dd');
+                        lastDayStr = firstDay.plus({ day: 6 }).toFormat('yyyy.MM.dd');
+                    } else if (value === 'last7') {
+                        const now = DateTime.now();
+                        const firstDay = now.minus({ day: 7 });
+                        firstDayStr = firstDay.toFormat('yyyy.MM.dd');
+                        lastDayStr = now.toFormat('yyyy.MM.dd');
+                    } else if (value === 'last30') {
+                        const now = DateTime.now();
+                        const firstDay = now.minus({ day: 30 });
+                        firstDayStr = firstDay.toFormat('yyyy.MM.dd');
+                        lastDayStr = now.toFormat('yyyy.MM.dd');
+                    } else if (value === 'month') {
+                        const now = DateTime.now();
+                        const firstDay = now.set({ day: 1 });
+                        firstDayStr = firstDay.toFormat('yyyy.MM.dd');
+                        const lastDay = firstDay.plus({ month: 1 }).minus({ day: 1 });
+                        lastDayStr = lastDay.toFormat('yyyy.MM.dd');
+                    } else {
+                        throw new Error(`Unsupported time range ${value}`);
+                    }
 
                     // load cat data for display in cat cards
                     axios
@@ -304,7 +296,7 @@ const TotalVisitsChart = ({ isLoading, cats }) => {
 
                             setOtherIntervalData({
                                 ...otherIntervalData,
-                                month: { visitCount, cats, intervals }
+                                [value]: { visitCount, cats, intervals }
                             });
                         })
                         .catch((error) => {
@@ -353,7 +345,7 @@ const TotalVisitsChart = ({ isLoading, cats }) => {
                         <Grid item xs={12}>
                             {fetchingChartData ? (
                                 <Box height={400}>
-                                    <LinearProgress variant="indeterminate" />
+                                    <LinearProgress />
                                 </Box>
                             ) : (
                                 <Chart {...chartData} />

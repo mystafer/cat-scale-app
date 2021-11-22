@@ -48,7 +48,7 @@ const App = () => {
             <ThemeProvider theme={themes(customization)}>
                 <CssBaseline />
                 {checkingLogin && !authentication.isAuthenticated ? (
-                    <LinearProgress color="primary" variant="indeterminate" />
+                    <LinearProgress color="primary" />
                 ) : (
                     <NavigationScroll>{authentication.isAuthenticated ? <Routes /> : <Login />}</NavigationScroll>
                 )}
